@@ -13,12 +13,11 @@
     "google-chrome"
     "slack"
     "zed"                # default editor
+    # Claude Code — a cask (installs the `claude` binary). In Homebrew, not the nixpkgs pin,
+    # so it stays current independent of `nix flake update`.
+    "claude-code"
   ];
 
   brews = [
-    # Claude Code — ships fast, so Homebrew keeps it current independent of the nixpkgs pin.
-    # If this isn't in homebrew-core in your region yet, add the appropriate tap in
-    # modules/homebrew.nix (homebrew.taps) and adjust the name.
-    "claude-code"
   ];
 }

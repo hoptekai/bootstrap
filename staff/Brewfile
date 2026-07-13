@@ -8,8 +8,7 @@ cask "1password-cli"
 cask "google-chrome"
 cask "slack"
 cask "zed"
-
-brew "claude-code"
+cask "claude-code"
 
 # BOOT:OPTIONAL (managed by `boot pick` — safe to also edit by hand)
 # BOOT:END
