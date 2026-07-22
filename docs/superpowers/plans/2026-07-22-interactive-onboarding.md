@@ -831,4 +831,265 @@ git commit -m "docs: README quick start for the guided installer"
 
 - `just lint && bats tests` — clean.
 - `just check` — flake still evaluates (no Nix files changed, sanity only).
-- VM smoke (requires tart + pushed branch): `just test-vm staff repo=YOU/bootstrap branch=<branch>` completes hands-off; then `just test-vm engineer ...` likewise. The FileVault/fdesetup password-prompt capture and `op item create` path can only be truly exercised on a real machine with a 1Password account — flag for manual verification during rollout.
+- VM smoke (requires tart + pushed branch): `just test-vm staff repo=YOU/bootstrap branch=<branch>` completes hands-off; then `just test-vm engineer ...` likewise. The FileVault/fdesetup password-prompt capture and vault-save path can only be truly exercised on a real machine with a password-manager account — flag for manual verification during rollout.
+
+---
+
+# Addendum (2026-07-22): swap 1Password → Bitwarden
+
+User decision after Tasks 1–7 shipped: the fleet password manager is **Bitwarden**, not 1Password. Mapping used throughout Tasks 8–10:
+
+| Concern | 1Password (old) | Bitwarden (new) |
+|---|---|---|
+| Desktop app | cask `1password` | cask `bitwarden` |
+| CLI | cask `1password-cli` (`op`) | **formula** `bitwarden-cli` (`bw`) — goes in `brews`, not `casks` |
+| SSH agent socket | `~/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock` | `~/.bitwarden-ssh-agent.sock` |
+| Agent toggle | Settings → Developer → Use the SSH agent | Settings → Enable SSH agent |
+| CLI auth | piggybacks desktop app (CLI integration toggle) | **separate**: `bw login` in the terminal; check with `bw login --check` |
+| Git signing | `op-ssh-sign` binary (`gpg.ssh.program`) | plain SSH signing via the agent: keep `gpg.format = "ssh"`, drop `gpg.ssh.program` entirely (git's default ssh-keygen signs through `SSH_AUTH_SOCK` using the literal public key in `user.signingkey`) |
+| Vault write | `op item create` | `bw unlock --raw` → session, then JSON `| bw encode | bw create item --session` |
+
+Additional bash-3.2/`/dev/tty`/shellcheck/idempotence constraints from the main Global Constraints section still bind.
+
+---
+
+### Task 8: Bitwarden swap in `bin/onboard` + `bin/boot`
+
+**Files:**
+- Modify: `bin/onboard`
+- Modify: `bin/boot` (doctor block, lines 78–83)
+
+**Interfaces:**
+- Consumes: existing framework (`say`/`note`/`ask`, `verify_loop`, `add_skipped`, `NONINTERACTIVE`).
+- Produces: `BW_SSH_SOCK` global (replaces `OP_SSH_SOCK`), `check_bw_login()` (replaces `check_op_signin`), `ensure_bitwarden_installed()` (replaces `ensure_1password_installed`), `guide_bw_signin()` (replaces `guide_op_signin`). `check_ssh_agent`/`check_github_ssh`/`guide_github_key`/`write_overlay` keep their names but use `BW_SSH_SOCK`.
+
+- [ ] **Step 1: Rename the socket global**
+
+Replace the `OP_SSH_SOCK=...` line with:
+
+```bash
+BW_SSH_SOCK="$HOME/.bitwarden-ssh-agent.sock"
+```
+
+Update every `SSH_AUTH_SOCK="$OP_SSH_SOCK"` usage (in `check_ssh_agent`, `check_github_ssh`, `guide_github_key`, `write_overlay`) to `SSH_AUTH_SOCK="$BW_SSH_SOCK"`.
+
+- [ ] **Step 2: Replace the sign-in check and install/guide functions**
+
+Replace `check_op_signin` with:
+
+```bash
+check_bw_login() { command -v bw >/dev/null 2>&1 && bw login --check >/dev/null 2>&1; }
+```
+
+Replace `ensure_1password_installed` and `guide_op_signin` with:
+
+```bash
+ensure_bitwarden_installed() {
+  say "Bitwarden"
+  brew list --cask bitwarden >/dev/null 2>&1 || brew install --cask bitwarden
+  brew list bitwarden-cli >/dev/null 2>&1    || brew install bitwarden-cli
+}
+
+guide_bw_signin() {
+  if check_bw_login; then note "Bitwarden: CLI already logged in"; return 0; fi
+  say "Bitwarden sign-in"
+  if [[ "$NONINTERACTIVE" != "1" ]]; then open -a Bitwarden || true; fi
+  note "In the Bitwarden window that just opened:"
+  note "  1. Log in to the company account (use your invite email)."
+  note "  2. Settings -> turn ON 'Enable SSH agent'."
+  note "The CLI logs in separately (self-hosted/EU server? first: bw config server <url>):"
+  if [[ "$NONINTERACTIVE" != "1" ]]; then
+    bw login < /dev/tty || true
+  fi
+  verify_loop "Bitwarden sign-in (app + CLI)" check_bw_login
+}
+```
+
+Update the callers: `engineer()` and `staff()` call `ensure_bitwarden_installed` and `guide_bw_signin`; `save_recovery_key` (Step 3) calls `check_bw_login`.
+
+- [ ] **Step 3: Rewrite `save_recovery_key` for `bw`**
+
+```bash
+save_recovery_key() {
+  local key="$1" title session payload a=""
+  title="FileVault recovery key ($(hostname))"
+  if check_bw_login; then
+    note "Unlock Bitwarden to save the recovery key (master password):"
+    if session="$(bw unlock --raw < /dev/tty)" \
+       && payload="{\"type\":2,\"secureNote\":{\"type\":0},\"name\":\"$title\",\"notes\":\"$key\"}" \
+       && printf '%s' "$payload" | bw encode | bw create item --session "$session" >/dev/null 2>&1; then
+      note "Recovery key saved to Bitwarden as '$title'."
+      return 0
+    fi
+  fi
+  printf '\n    FILEVAULT RECOVERY KEY:  %s\n\n' "$key"
+  note "Couldn't save it to Bitwarden automatically. Store it there NOW — it is shown only once."
+  until [[ "$a" == "saved" ]]; do
+    a="$(ask "    Type 'saved' once it is stored somewhere safe: ")"
+  done
+  clear >/dev/null 2>&1 || true
+  note "FileVault recovery key stored."
+}
+```
+
+- [ ] **Step 4: Sweep remaining onboard strings**
+
+- `guide_ssh_agent`: "Bitwarden SSH agent" say/note lines; instructions: `Settings -> turn ON 'Enable SSH agent'` and `No SSH key yet? New item -> SSH key (generates Ed25519).`; verify label `"Bitwarden SSH agent"`.
+- `write_overlay`: paste prompt says `Paste your Bitwarden SSH PUBLIC key (ssh-ed25519 ...), used to sign commits:`; agent-found note says `Using your Bitwarden SSH key for commit signing.`
+- Grep check: `grep -in "1password\|op_ssh\|check_op\|op item\|op account" bin/onboard` returns nothing.
+
+- [ ] **Step 5: Update `bin/boot` doctor**
+
+Replace the op/agent lines with:
+
+```bash
+    if command -v bw >/dev/null; then
+      bw login --check >/dev/null 2>&1 && echo "bitwarden: logged in" || echo "bitwarden: not logged in (run 'bw login')"
+    else
+      echo "bitwarden: bw CLI MISSING"
+    fi
+    ssh-add -l >/dev/null 2>&1 && echo "ssh agent: key loaded" || echo "ssh agent: no key (enable the Bitwarden SSH agent)"
+```
+
+- [ ] **Step 6: Verify + commit**
+
+Run: `bats tests && just lint`
+Expected: `12 tests, 0 failures` (pure helpers and framework are untouched); lint exit 0.
+
+```bash
+git add bin/onboard bin/boot
+git commit -m "feat: swap 1Password for Bitwarden in onboard and doctor"
+```
+
+---
+
+### Task 9: Bitwarden swap in nix/brew wiring
+
+**Files:**
+- Modify: `packages/casks-shared.nix`
+- Modify: `staff/Brewfile` (lines 6–7)
+- Modify: `home/common.nix`
+- Modify: `users/_template.nix` (line 29 comment)
+- Modify: `claude/common.md` (lines 11, 21)
+- Modify: `templates/devbox.json` (line 17 area)
+
+**Interfaces:**
+- Consumes: `modules/homebrew.nix` already maps `shared.casks`/`shared.brews` — no change needed there.
+- Produces: `bitwarden` cask + `bitwarden-cli` brew fleet-wide; git signing via plain SSH agent (no signer binary).
+
+- [ ] **Step 1: `packages/casks-shared.nix`**
+
+Replace the two 1Password lines with a cask and a brew:
+
+```nix
+  casks = [
+    "bitwarden"          # password manager + SSH agent
+    ...
+  ];
+
+  brews = [
+    "bitwarden-cli"      # `bw` for secrets from the vault
+  ];
+```
+
+- [ ] **Step 2: `staff/Brewfile`**
+
+Replace lines 6–7 with:
+
+```ruby
+cask "bitwarden"
+brew "bitwarden-cli"
+```
+
+- [ ] **Step 3: `home/common.nix`**
+
+Replace the let-bindings and git signing wiring:
+
+```nix
+let
+  # Bitwarden serves SSH keys from its desktop-app agent — keys never touch disk.
+  bitwardenAgentSock = "${config.home.homeDirectory}/.bitwarden-ssh-agent.sock";
+in
+```
+
+(remove `opSshSign` entirely), `SSH_AUTH_SOCK = bitwardenAgentSock;`, and in `programs.git.settings` keep `gpg.format = "ssh"` but DELETE the `gpg.ssh.program` line; update the comment to:
+
+```nix
+      # Commit signing with the SSH key served by the Bitwarden agent
+      # (key + signByDefault set in the overlay; default ssh-keygen signs via SSH_AUTH_SOCK).
+```
+
+- [ ] **Step 4: comment/doc strings**
+
+- `users/_template.nix:29`: `# Your Bitwarden SSH PUBLIC key (starts with "ssh-ed25519 ..."). Used to sign commits.`
+- `claude/common.md:11`: signing note says `(SSH signing via the Bitwarden agent)`.
+- `claude/common.md:21`: `**Never commit secrets.** Pull them from Bitwarden: \`bw get password <item>\` / \`bw get notes <item>\`,` (adjust the rest of the sentence to fit).
+- `templates/devbox.json:17` area: same treatment — reference `bw get password <item>` instead of `op read`.
+
+- [ ] **Step 5: Verify + commit**
+
+Run: `grep -rn -i "1password\|op-ssh-sign" packages home staff users claude templates modules` → no hits.
+Run: `nix flake check` if `nix` is available (report "skipped: no nix" otherwise). Also `just lint` (defaults.sh/Brewfile untouched by shellcheck but cheap).
+
+```bash
+git add packages/casks-shared.nix staff/Brewfile home/common.nix users/_template.nix claude/common.md templates/devbox.json
+git commit -m "feat: Bitwarden for SSH agent, git signing, and secrets in nix config"
+```
+
+---
+
+### Task 10: Bitwarden swap in docs
+
+**Files:**
+- Modify: `README.md`
+- Modify: `TESTING.md`
+- Modify: `docs/superpowers/specs/2026-07-22-interactive-onboarding-design.md` (append amendment section only — do not rewrite the historical body)
+
+**Interfaces:** none — prose only. Must accurately describe Task 8/9 behavior.
+
+- [ ] **Step 1: README sweep**
+
+- Engineer quick-start walkthrough bullet becomes: `**Bitwarden** — install, sign in (app + \`bw\` CLI), enable the SSH agent, create your SSH key, add it to GitHub (as both an authentication and a signing key).`
+- Recovery-key bullet + staff paragraph: "saved straight into your Bitwarden vault" / "recovery key saved to Bitwarden".
+- Overlay bullet: "Bitwarden signing key (read from the agent, no pasting)".
+- `boot doctor` table row: `sanity-check Nix / brew / Bitwarden / SSH / upstream`.
+- Replace the `## Secrets & signing (1Password)` section with:
+
+```markdown
+## Secrets & signing (Bitwarden)
+
+- SSH keys are served by the **Bitwarden SSH agent** (desktop app) — they never touch disk.
+- Git commits are **signed** with that SSH key via the agent (`gpg.format = ssh`, wired in
+  `home/common.nix` — no signer binary needed).
+- CLI secrets come from **`bw`** (`bw get password <item>`), e.g. in devbox scripts.
+```
+
+- FileVault note: "saves the recovery key to Bitwarden".
+- Check: `grep -in "1password" README.md` → no hits.
+
+- [ ] **Step 2: TESTING.md**
+
+VM notes 1 and 3: s/1Password/Bitwarden/ (sign-in wording: "you'll need a Bitwarden account"). Check `grep -in "1password" TESTING.md` → no hits.
+
+- [ ] **Step 3: Spec amendment**
+
+Append to the spec doc:
+
+```markdown
+## Amendment (2026-07-22): Bitwarden instead of 1Password
+
+After implementation, the fleet password manager changed to Bitwarden. The
+design is unchanged structurally; the substitutions are: cask `bitwarden` +
+formula `bitwarden-cli` (`bw`, logs in separately via `bw login`); SSH agent
+socket `~/.bitwarden-ssh-agent.sock`; git signing via plain SSH-agent signing
+(no `op-ssh-sign` equivalent — `gpg.ssh.program` dropped); recovery key saved
+with `bw unlock --raw` + `bw encode | bw create item`, same display-and-confirm
+fallback.
+```
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add README.md TESTING.md docs/superpowers/specs/2026-07-22-interactive-onboarding-design.md
+git commit -m "docs: Bitwarden swap in README, TESTING, and spec amendment"
+```
