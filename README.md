@@ -16,38 +16,39 @@ Both share one Homebrew app list, so fleet apps are maintained in a single place
 
 ### Engineers
 
-1. **Enable FileVault** — System Settings → Privacy & Security → FileVault. (Can't be done
-   declaratively; do it first.)
-2. **Join 1Password** (Business) and accept the shared **Eng** vault.
-3. **Turn on the 1Password SSH agent** — 1Password → Settings → Developer → *Use the SSH
-   agent*. Create/choose an SSH key; add its **public** key to
-   [GitHub → Settings → SSH keys](https://github.com/settings/keys) as both an
-   *Authentication* and a *Signing* key.
-4. **Fork this repo** to your own GitHub account.
-5. **Run the installer** (paste your fork's clone URL):
+1. **Fork this repo** to your own GitHub account.
+2. **Run the installer** (paste your fork's clone URL — either form works):
 
    ```sh
    curl -fsSL https://raw.githubusercontent.com/hoptekai/bootstrap/main/install.sh \
      | bash -s -- --profile engineer --fork git@github.com:YOU/bootstrap.git
    ```
 
-   It installs Homebrew + Nix (Determinate installer, upstream Nix), clones your fork to
-   `~/.config/bootstrap`, generates `users/<you>.nix` from the template (asking for your
-   name, git email, and 1Password signing key), runs the optional-package picker, and does
-   the first `darwin-rebuild switch`.
-6. **Push your overlay:** `git -C ~/.config/bootstrap push origin`.
+That's it. The installer clones your fork over HTTPS, then walks you through
+everything interactively, verifying each step before moving on:
+
+- **1Password** — install, sign in, enable the CLI integration and SSH agent,
+  create your SSH key, add it to GitHub (as both an authentication and a
+  signing key).
+- **FileVault** — enabled via `fdesetup`; your recovery key is saved straight
+  into your 1Password vault.
+- **Your overlay** — `users/<you>.nix` is generated with your name, git email,
+  and 1Password signing key (read from the agent, no pasting), then the first
+  `darwin-rebuild switch` runs and your overlay commit is pushed to your fork.
+
+Any step can be skipped (type `skip`) and finished later — skipped steps are
+listed at the end, and re-running the installer resumes where you left off.
 
 ### Staff
 
-1. **Enable FileVault** (as above).
-2. **Run the installer:**
+```sh
+curl -fsSL https://raw.githubusercontent.com/hoptekai/bootstrap/main/install.sh \
+  | bash -s -- --profile staff
+```
 
-   ```sh
-   curl -fsSL https://raw.githubusercontent.com/hoptekai/bootstrap/main/install.sh \
-     | bash -s -- --profile staff
-   ```
-
-   Installs Homebrew, the shared apps, your optional picks, and the security baseline.
+Walks through 1Password sign-in and FileVault (recovery key saved to
+1Password), then installs the shared apps, your optional picks, and the
+security baseline.
 
 ---
 
@@ -122,7 +123,8 @@ No global Node/Python/Go is installed on purpose.
 - Fast-moving apps (Claude Code, etc.) live in **Homebrew**, not the nixpkgs pin, so they
   stay current.
 - No MDM (Jamf/Kandji) — this repo is the security baseline.
-- FileVault is a manual step; it can't be enabled declaratively.
+- FileVault can't be enabled declaratively; `bin/onboard` enables it with
+  `sudo fdesetup enable` and saves the recovery key to 1Password.
 
 [nix-darwin]: https://github.com/LnL7/nix-darwin
 [Home Manager]: https://github.com/nix-community/home-manager
