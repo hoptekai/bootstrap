@@ -14,6 +14,7 @@ Catch most breakage in seconds, safely, on your own machine:
 
 ```sh
 just lint      # shellcheck install.sh + the baseline/helper scripts
+just test      # bats unit tests for install.sh / bin/onboard helpers
 just check     # nix flake check + build the closure WITHOUT switching
 ```
 
@@ -60,14 +61,19 @@ Start with the **staff** profile for a first smoke test — it skips Nix and the
 SSH-fork prompt, so it's the quickest signal that the download + Homebrew path
 works.
 
-## Two gotchas a fresh VM exposes
+## VM notes
 
-1. **The default clone URLs are SSH** (`git@github.com:…`). A clean VM has no SSH
-   keys and no 1Password agent, so `git clone` would fail. `just test-vm` works
-   around this by passing HTTPS `--fork` / `--upstream` overrides in the printed
-   command — keep those if you run the installer by hand.
-2. **1Password-dependent steps can't be exercised** in the VM: commit signing and
-   the SSH agent. Verify those manually on a real enrolled machine.
+1. **Guided steps are skipped by default.** The command `test-vm` prints exports
+   `BOOTSTRAP_NONINTERACTIVE=1`, so the 1Password sign-in, SSH agent, GitHub
+   key, FileVault, and package-picker steps are recorded as skipped and the
+   overlay gets placeholder values — the run completes hands-off. To exercise
+   the real walkthrough, run `just test-vm engineer noninteractive=0` (you'll
+   need a 1Password account to sign in with).
+2. **Clones are HTTPS by default now** — `install.sh` converts `git@` URLs
+   itself, so a keyless VM clones fine. The `--fork`/`--upstream` overrides in
+   the printed command just point at your test repo.
+3. **1Password-dependent steps can't be fully exercised** in the VM: commit
+   signing and the SSH agent. Verify those manually on a real enrolled machine.
 
 ## Cleaning up
 
