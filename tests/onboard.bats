@@ -45,3 +45,19 @@ Recovery key = 'ABCD-2345-EFGH-6789-JKLM-2345'"
   run summary
   [[ "$output" == *"FileVault"* ]]
 }
+
+@test "write_overlay renders the template with placeholders in noninteractive mode" {
+  tmp="$BATS_TEST_TMPDIR/repo"
+  mkdir -p "$tmp/users"
+  cp "$BATS_TEST_DIRNAME/../users/_template.nix" "$tmp/users/_template.nix"
+  git -C "$tmp" init -q
+  git -C "$tmp" config user.email test@example.com
+  git -C "$tmp" config user.name Test
+  BOOTSTRAP_DIR="$tmp" NONINTERACTIVE=1 write_overlay
+  f="$tmp/users/$(id -un).nix"
+  [ -f "$f" ]
+  grep -q 'Test User' "$f"
+  grep -q 'test@example.com' "$f"
+  ! grep -q '__FULL_NAME__' "$f"
+  ! grep -q '__ONEPASSWORD_SSH_PUBLIC_KEY__' "$f"
+}

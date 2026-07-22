@@ -149,9 +149,91 @@ ensure_filevault() {
   fi
 }
 
+# ---- engineer flow ---------------------------------------------------------
+
+write_overlay() {
+  local username userfile full_name git_email pubkey
+  username="$(id -un)"
+  userfile="$BOOTSTRAP_DIR/users/$username.nix"
+  if [[ -f "$userfile" ]]; then note "overlay users/$username.nix already exists"; return 0; fi
+  say "Creating users/$username.nix"
+  if [[ "$NONINTERACTIVE" == "1" ]]; then
+    full_name="Test User"; git_email="test@example.com"; pubkey="ssh-ed25519 AAAA_placeholder"
+  else
+    full_name="$(ask 'Full name (for git): ')"
+    git_email="$(ask 'Git email: ')"
+    pubkey="$(SSH_AUTH_SOCK="$OP_SSH_SOCK" ssh-add -L 2>/dev/null | head -n1 || true)"
+    if [[ -z "$pubkey" ]]; then
+      echo "Paste your 1Password SSH PUBLIC key (ssh-ed25519 ...), used to sign commits:"
+      pubkey="$(ask '> ')"
+    else
+      note "Using your 1Password SSH key for commit signing."
+    fi
+  fi
+  sed -e "s|__FULL_NAME__|$full_name|" \
+      -e "s|__GIT_EMAIL__|$git_email|" \
+      -e "s|__ONEPASSWORD_SSH_PUBLIC_KEY__|$pubkey|" \
+      "$BOOTSTRAP_DIR/users/_template.nix" > "$userfile"
+  git -C "$BOOTSTRAP_DIR" add "users/$username.nix"
+  git -C "$BOOTSTRAP_DIR" commit -m "Add overlay for $username" || true
+}
+
+ensure_nix() {
+  if command -v nix >/dev/null 2>&1; then return 0; fi
+  say "Installing Nix (Determinate installer, upstream Nix)"
+  curl -fsSL https://install.determinate.systems/nix | sh -s -- install --no-confirm
+}
+
+source_nix() {
+  # shellcheck disable=SC1091
+  [[ -f /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh ]] \
+    && . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
+}
+
+# SSH provably works now, so move origin off HTTPS and push the overlay commit.
+finish_engineer_remote() {
+  local origin ssh_url
+  origin="$(git -C "$BOOTSTRAP_DIR" remote get-url origin)"
+  ssh_url="$(to_ssh_url "$origin")"
+  if [[ "$ssh_url" != "$origin" ]]; then
+    git -C "$BOOTSTRAP_DIR" remote set-url origin "$ssh_url"
+    note "origin is now $ssh_url"
+  fi
+  if check_github_ssh; then
+    say "Pushing your overlay commit"
+    git -C "$BOOTSTRAP_DIR" push origin HEAD \
+      || note "push failed — run: git -C $BOOTSTRAP_DIR push origin"
+  else
+    note "GitHub SSH not verified — push later with: git -C $BOOTSTRAP_DIR push origin"
+  fi
+}
+
+engineer() {
+  ensure_1password_installed
+  guide_op_signin
+  guide_ssh_agent
+  guide_github_key
+  ensure_filevault
+  ensure_nix
+  source_nix
+  write_overlay
+  if [[ "$NONINTERACTIVE" != "1" ]]; then
+    say "Optional package picker"
+    "$BOOTSTRAP_DIR/bin/pick" engineer || true
+  fi
+  say "First darwin-rebuild switch (#$(id -un)) — you'll be asked for your password"
+  nix run nix-darwin -- switch --flake "$BOOTSTRAP_DIR#$(id -un)"
+  if [[ "$NONINTERACTIVE" != "1" ]]; then finish_engineer_remote; fi
+  summary
+}
+
 main() {
-  echo "onboard: not implemented yet" >&2
-  exit 1
+  local profile="${1:-}"
+  case "$profile" in
+    engineer) engineer ;;
+    staff) echo "onboard: staff flow not implemented yet" >&2; exit 1 ;;
+    *) echo "usage: onboard <engineer|staff>" >&2; exit 1 ;;
+  esac
 }
 
 if [[ "${BOOTSTRAP_TEST_SOURCING:-0}" != "1" ]]; then
