@@ -5,6 +5,7 @@
 
 cask "bitwarden"
 brew "bitwarden-cli"
+brew "gum"           # powers `boot pick`
 cask "google-chrome"
 cask "slack"
 cask "zed"

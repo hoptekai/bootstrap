@@ -27,6 +27,32 @@ setup() {
   [ "${lines[0]}" = "sudo nix run nix-darwin -- switch --flake /tmp/bs#$(id -un)" ]
 }
 
+@test "ensure_gum installs gum via brew when missing" {
+  stubs="$BATS_TEST_TMPDIR/stubs"
+  log="$BATS_TEST_TMPDIR/calls.log"
+  mkdir -p "$stubs"
+  printf '#!/bin/bash\necho "brew $*" >> "%s"\n' "$log" > "$stubs/brew"
+  chmod +x "$stubs/brew"
+
+  PATH="$stubs:/usr/bin:/bin" ensure_gum
+
+  run cat "$log"
+  [ "$output" = "brew install gum" ]
+}
+
+@test "ensure_gum is a no-op when gum is present" {
+  stubs="$BATS_TEST_TMPDIR/stubs"
+  log="$BATS_TEST_TMPDIR/calls.log"
+  mkdir -p "$stubs"
+  printf '#!/bin/bash\n' > "$stubs/gum"
+  printf '#!/bin/bash\necho "brew $*" >> "%s"\n' "$log" > "$stubs/brew"
+  chmod +x "$stubs/gum" "$stubs/brew"
+
+  PATH="$stubs:/usr/bin:/bin" ensure_gum
+
+  [ ! -f "$log" ]
+}
+
 @test "extract_recovery_key pulls the key out of fdesetup output" {
   run extract_recovery_key "Enter the password for user 'admin':
 Recovery key = 'ABCD-2345-EFGH-6789-JKLM-2345'"

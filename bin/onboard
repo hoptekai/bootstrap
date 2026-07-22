@@ -207,6 +207,15 @@ first_darwin_switch() {
   sudo nix run nix-darwin -- switch --flake "$BOOTSTRAP_DIR#$(id -un)"
 }
 
+# The engineer picker runs BEFORE the first switch (so choices land in the
+# first build), but gum ships via home/common.nix which only exists after it.
+# Bootstrap gum with brew; `cleanup = "zap"` removes this copy at the switch.
+ensure_gum() {
+  command -v gum >/dev/null 2>&1 && return 0
+  echo "==> Installing gum (temporary, via Homebrew)"
+  brew install gum
+}
+
 # SSH provably works now, so move origin off HTTPS and push the overlay commit.
 finish_engineer_remote() {
   local origin ssh_url
@@ -236,6 +245,7 @@ engineer() {
   write_overlay
   if [[ "$NONINTERACTIVE" != "1" ]]; then
     say "Optional package picker"
+    ensure_gum
     "$BOOTSTRAP_DIR/bin/pick" engineer || true
   fi
   say "First darwin-rebuild switch (#$(id -un)) — you'll be asked for your password"
@@ -254,6 +264,7 @@ staff() {
   brew bundle --file="$BOOTSTRAP_DIR/staff/Brewfile"
   if [[ "$NONINTERACTIVE" != "1" ]]; then
     say "Optional package picker"
+    ensure_gum
     "$BOOTSTRAP_DIR/bin/pick" staff || true
     brew bundle --file="$BOOTSTRAP_DIR/staff/Brewfile"
   fi
