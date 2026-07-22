@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# `bin/onboard` — guided post-clone setup, invoked by install.sh (or directly to resume).
+#   onboard engineer | onboard staff
+# Every step checks current state first, so re-running resumes where it left off.
+# BOOTSTRAP_NONINTERACTIVE=1 skips guided steps and uses placeholders (VM testing).
+set -euo pipefail
+
+BOOTSTRAP_DIR="${BOOTSTRAP_DIR:-$HOME/.config/bootstrap}"
+# shellcheck disable=SC2034
+NONINTERACTIVE="${BOOTSTRAP_NONINTERACTIVE:-0}"
+# shellcheck disable=SC2034
+OP_SSH_SOCK="$HOME/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
+# shellcheck disable=SC2034
+SKIPPED=""
+
+say()  { printf '\n==> %s\n' "$*"; }
+note() { printf '    %s\n' "$*"; }
+ask()  { local var; read -r -p "$1" var < /dev/tty; printf '%s' "$var"; }
+
+# ---- pure helpers (unit-tested in tests/onboard.bats) ----------------------
+
+# https://github.com/you/repo.git -> git@github.com:you/repo.git; anything else unchanged.
+to_ssh_url() {
+  case "$1" in
+    https://github.com/*) printf 'git@github.com:%s' "${1#https://github.com/}" ;;
+    *) printf '%s' "$1" ;;
+  esac
+}
+
+# Personal recovery key from `fdesetup enable` output (XXXX-XXXX-XXXX-XXXX-XXXX-XXXX).
+extract_recovery_key() {
+  printf '%s' "$1" | grep -Eo '[A-Z0-9]{4}(-[A-Z0-9]{4}){5}' | head -n1 || true
+}
+
+main() {
+  echo "onboard: not implemented yet" >&2
+  exit 1
+}
+
+if [[ "${BOOTSTRAP_TEST_SOURCING:-0}" != "1" ]]; then
+  main "$@"
+fi

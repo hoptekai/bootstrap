@@ -42,7 +42,11 @@ check:
 
 # Lint the shell scripts (fast, safe, no VM needed).
 lint:
-    shellcheck install.sh staff/defaults.sh bin/boot bin/pick
+    shellcheck install.sh staff/defaults.sh bin/boot bin/pick bin/onboard
+
+# Unit-test the shell helpers (brew install bats-core).
+test:
+    bats tests
 
 # --- VM testing (Apple Silicon) --------------------------------------------
 # Throwaway macOS VMs via `tart`, so you can exercise the full curl|bash flow
