@@ -53,6 +53,9 @@
             {
               home-manager.useGlobalPkgs = true;
               home-manager.useUserPackages = true;
+              # Pre-existing dotfiles (installer/macOS .zshrc etc.) are moved
+              # aside as *.before-hm instead of aborting the first activation.
+              home-manager.backupFileExtension = "before-hm";
               home-manager.extraSpecialArgs = { inherit inputs username; };
             }
             ./users/${username}.nix
