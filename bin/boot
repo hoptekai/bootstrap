@@ -13,7 +13,8 @@ in_repo() { git -C "$BOOTSTRAP_DIR" "$@"; }
 pull_upstream() {
   if in_repo remote | grep -qx upstream; then
     echo "==> git pull upstream main"
-    in_repo pull --rebase upstream main
+    # pick/add/flake-update leave uncommitted changes; autostash instead of refusing.
+    in_repo pull --rebase --autostash upstream main
   else
     echo "!! no 'upstream' remote set; skipping pull (set it with: git -C $BOOTSTRAP_DIR remote add upstream <canonical-url>)"
   fi
