@@ -14,8 +14,8 @@
   },
   "//": [
     "Copy this into a new project, then `direnv allow` so the shell auto-activates.",
-    "Pull secrets from 1Password instead of committing them, e.g.:",
-    "  export DATABASE_URL=$(op read 'op://Eng/my-project/database_url')",
-    "or use a .env with `op inject`:  op inject -i .env.tpl -o .env"
+    "Pull secrets from Bitwarden instead of committing them, e.g.:",
+    "  export DATABASE_URL=$(bw get password 'my-project-database-url')",
+    "or use bw get notes for multi-line secrets"
   ]
 }

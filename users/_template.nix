@@ -26,8 +26,8 @@
       settings.user.name = "__FULL_NAME__";
       settings.user.email = "__GIT_EMAIL__";
       signing = {
-        # Your 1Password SSH PUBLIC key (starts with "ssh-ed25519 ..."). Used to sign commits.
-        key = "__ONEPASSWORD_SSH_PUBLIC_KEY__";
+        # Your Bitwarden SSH PUBLIC key (starts with "ssh-ed25519 ..."). Used to sign commits.
+        key = "__BITWARDEN_SSH_PUBLIC_KEY__";
         signByDefault = true;
       };
     };

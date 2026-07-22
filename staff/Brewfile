@@ -3,8 +3,8 @@
 # Mirrors packages/casks-shared.nix. Keep the two in sync when you add a fleet-wide app.
 # Optional picks (Spotify, etc.) are appended below the marker by `boot pick`.
 
-cask "1password"
-cask "1password-cli"
+cask "bitwarden"
+brew "bitwarden-cli"
 cask "google-chrome"
 cask "slack"
 cask "zed"

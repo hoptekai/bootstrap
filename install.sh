@@ -72,7 +72,7 @@ main() {
 
   echo "$PROFILE" > "$BOOTSTRAP_DIR/.profile"
 
-  # 3. Hand off to the guided walkthrough (1Password, FileVault, overlay, build).
+  # 3. Hand off to the guided walkthrough (Bitwarden, FileVault, overlay, build).
   exec "$BOOTSTRAP_DIR/bin/onboard" "$PROFILE"
 }
 

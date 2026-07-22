@@ -8,7 +8,7 @@ preferences in your own `~/.claude/CLAUDE.md`, which imports this via `@common.m
 - Use **Conventional Commits**: `type(scope): summary` (`feat`, `fix`, `chore`, `docs`,
   `refactor`, `test`, `build`, `ci`). Imperative mood, lower-case summary, no trailing period.
 - Keep commits focused; separate refactors from behavior changes.
-- Commits are **signed** (1Password SSH signing) — don't disable it.
+- Commits are **signed** (SSH signing via the Bitwarden agent) — don't disable it.
 
 ## Environments & tooling
 - **Prefer devbox for project toolchains.** Add languages/runtimes to the project's
@@ -18,8 +18,7 @@ preferences in your own `~/.claude/CLAUDE.md`, which imports this via `@common.m
 - Fast-moving apps/CLIs belong in Homebrew (via bootstrap), not the nixpkgs pin.
 
 ## Secrets
-- **Never commit secrets.** Pull them from 1Password: `op read op://Eng/<item>/<field>`,
-  or template a `.env` with `op inject`.
+- **Never commit secrets.** Pull them from Bitwarden: `bw get password <item>` / `bw get notes <item>`.
 - Don't print secret values into logs, terminals, or commit messages.
 
 ## Working style

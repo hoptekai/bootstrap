@@ -184,7 +184,7 @@ write_overlay() {
   fi
   sed -e "s|__FULL_NAME__|$(sed_escape "$full_name")|" \
       -e "s|__GIT_EMAIL__|$(sed_escape "$git_email")|" \
-      -e "s|__ONEPASSWORD_SSH_PUBLIC_KEY__|$(sed_escape "$pubkey")|" \
+      -e "s|__BITWARDEN_SSH_PUBLIC_KEY__|$(sed_escape "$pubkey")|" \
       "$BOOTSTRAP_DIR/users/_template.nix" > "$userfile"
   git -C "$BOOTSTRAP_DIR" add "users/$username.nix"
   git -C "$BOOTSTRAP_DIR" commit -m "Add overlay for $username" || true

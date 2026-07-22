@@ -8,8 +8,7 @@
 # live in packages/optional.list instead.
 {
   casks = [
-    "1password"          # password manager + SSH agent
-    "1password-cli"      # `op` + `op-ssh-sign` for secrets and git signing
+    "bitwarden"          # password manager + SSH agent
     "google-chrome"
     "slack"
     "zed"                # default editor
@@ -19,5 +18,6 @@
   ];
 
   brews = [
+    "bitwarden-cli"      # `bw` for secrets from the vault
   ];
 }

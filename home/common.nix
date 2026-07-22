@@ -2,11 +2,8 @@
 # Centrally owned upstream. Personal identity (name/email/signing key) lives in the overlay.
 { pkgs, config, lib, ... }:
 let
-  # 1Password serves SSH keys from its agent — keys never touch disk.
-  onePasswordAgentSock =
-    "${config.home.homeDirectory}/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock";
-  # Signer shipped by the 1Password desktop app for SSH-based git commit signing.
-  opSshSign = "/Applications/1Password.app/Contents/MacOS/op-ssh-sign";
+  # Bitwarden serves SSH keys from its desktop-app agent — keys never touch disk.
+  bitwardenAgentSock = "${config.home.homeDirectory}/.bitwarden-ssh-agent.sock";
 in
 {
   home.stateVersion = "24.05";
@@ -28,7 +25,7 @@ in
   home.sessionVariables = {
     EDITOR = "zed --wait";
     VISUAL = "zed --wait";
-    SSH_AUTH_SOCK = onePasswordAgentSock;
+    SSH_AUTH_SOCK = bitwardenAgentSock;
   };
 
   programs.zsh = {
@@ -63,9 +60,9 @@ in
     settings = {
       init.defaultBranch = "main";
       pull.rebase = true;
-      # Commit signing via the 1Password SSH agent (key + signByDefault set in the overlay).
+      # Commit signing with the SSH key served by the Bitwarden agent
+      # (key + signByDefault set in the overlay; default ssh-keygen signs via SSH_AUTH_SOCK).
       gpg.format = "ssh";
-      gpg.ssh.program = opSshSign;
       core.editor = "zed --wait";
     };
     # user.name / user.email / signing key come from the per-user overlay.
