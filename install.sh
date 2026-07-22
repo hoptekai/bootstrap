@@ -27,6 +27,19 @@ to_https_url() {
   esac
 }
 
+install_homebrew() {
+  echo "==> Installing Homebrew (you may be asked for your macOS password)"
+  # The NONINTERACTIVE installer probes with `sudo -n`, which fails without a
+  # cached credential even for admins — prime the timestamp first.
+  sudo -v
+  NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+}
+
+# True if the repo can be cloned without credentials (exists and is public).
+check_remote_readable() {
+  GIT_TERMINAL_PROMPT=0 git ls-remote "$1" HEAD >/dev/null 2>&1
+}
+
 main() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -44,8 +57,7 @@ main() {
 
   # 1. Homebrew (also pulls in Xcode Command Line Tools / git on a bare machine).
   if ! command -v brew >/dev/null 2>&1; then
-    echo "==> Installing Homebrew"
-    NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    install_homebrew
   fi
   eval "$(/opt/homebrew/bin/brew shellenv 2>/dev/null || /usr/local/bin/brew shellenv)"
 
@@ -61,6 +73,14 @@ main() {
     echo "==> Repo exists, pulling"
     git -C "$BOOTSTRAP_DIR" pull --ff-only || true
   else
+    if ! check_remote_readable "$ORIGIN"; then
+      echo "error: cannot read $ORIGIN without credentials." >&2
+      echo "Either the repo does not exist or it is PRIVATE. This bootstrap clones" >&2
+      echo "over HTTPS before any GitHub auth is set up, so the repo must be public." >&2
+      echo "Fork via https://github.com/hoptekai/bootstrap/fork (forks of a public" >&2
+      echo "repo are always public) — a private mirror will not work here." >&2
+      exit 1
+    fi
     echo "==> Cloning into $BOOTSTRAP_DIR"
     mkdir -p "$(dirname "$BOOTSTRAP_DIR")"
     git clone "$ORIGIN" "$BOOTSTRAP_DIR"
