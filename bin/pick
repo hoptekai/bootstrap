@@ -66,7 +66,10 @@ replace_region() {
   ' "$file" > "$file.tmp" && mv "$file.tmp" "$file"
 }
 
-nix_list() { local out=""; for n in "$@"; do out+=" \"$n\""; done; printf '%s' "$out"; }
+# Skip empties: "${arr[@]:-}" on an empty array yields one "" (bash 3.2 + set -u).
+quoted_list() { local out="" n; for n in "$@"; do [[ -n "$n" ]] && out+=" \"$n\""; done; printf '%s' "$out"; }
+# nixpkgs entries are attribute names, not strings: `with pkgs; [ htop ]`.
+bare_list() { local out="" n; for n in "$@"; do [[ -n "$n" ]] && out+=" $n"; done; printf '%s' "$out"; }
 
 if [[ "$PROFILE" == "engineer" ]]; then
   username="$(id -un)"
@@ -76,8 +79,8 @@ if [[ "$PROFILE" == "engineer" ]]; then
   [[ ${#chosen_brews[@]:-0} -gt 0 ]] && \
     echo "note: brew-type optional packages (${chosen_brews[*]}) aren't applied for engineers; add them to packages/casks-shared.nix instead." >&2
 
-  tmp_casks="$(mktemp)"; printf '  homebrew.casks = [%s ];\n' "$(nix_list "${chosen_casks[@]:-}")" > "$tmp_casks"
-  tmp_nix="$(mktemp)";   printf '    home.packages = with pkgs; [%s ];\n' "$(nix_list "${chosen_nix[@]:-}")" > "$tmp_nix"
+  tmp_casks="$(mktemp)"; printf '  homebrew.casks = [%s ];\n' "$(quoted_list "${chosen_casks[@]:-}")" > "$tmp_casks"
+  tmp_nix="$(mktemp)";   printf '    home.packages = with pkgs; [%s ];\n' "$(bare_list "${chosen_nix[@]:-}")" > "$tmp_nix"
 
   replace_region "$userfile" "BOOT:OPTIONAL_CASKS" "$tmp_casks"
   replace_region "$userfile" "BOOT:OPTIONAL_NIX"   "$tmp_nix"
