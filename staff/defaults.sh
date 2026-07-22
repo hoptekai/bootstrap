@@ -24,4 +24,4 @@ defaults write com.apple.screencapture location "$HOME/Screenshots"
 # Apply UI changes.
 killall Finder SystemUIServer 2>/dev/null || true
 
-echo "==> Done. Note: enabling FileVault is a manual step (see README)."
+echo "==> Done."

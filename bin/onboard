@@ -232,11 +232,29 @@ engineer() {
   summary
 }
 
+# ---- staff flow ------------------------------------------------------------
+
+staff() {
+  ensure_1password_installed
+  guide_op_signin
+  ensure_filevault
+  say "Installing apps (brew bundle)"
+  brew bundle --file="$BOOTSTRAP_DIR/staff/Brewfile"
+  if [[ "$NONINTERACTIVE" != "1" ]]; then
+    say "Optional package picker"
+    "$BOOTSTRAP_DIR/bin/pick" staff || true
+    brew bundle --file="$BOOTSTRAP_DIR/staff/Brewfile"
+  fi
+  say "Applying security baseline"
+  bash "$BOOTSTRAP_DIR/staff/defaults.sh"
+  summary
+}
+
 main() {
   local profile="${1:-}"
   case "$profile" in
     engineer) engineer ;;
-    staff) echo "onboard: staff flow not implemented yet" >&2; exit 1 ;;
+    staff) staff ;;
     *) echo "usage: onboard <engineer|staff>" >&2; exit 1 ;;
   esac
 }
