@@ -27,6 +27,14 @@ to_https_url() {
   esac
 }
 
+# Apple Silicon: some casks and brew's Intel prefix need Rosetta 2.
+ensure_rosetta() {
+  [[ "$(uname -m)" == "arm64" ]] || return 0
+  arch -x86_64 /usr/bin/true 2>/dev/null && return 0
+  echo "==> Installing Rosetta 2"
+  sudo softwareupdate --install-rosetta --agree-to-license
+}
+
 install_homebrew() {
   echo "==> Installing Homebrew (you may be asked for your macOS password)"
   # The NONINTERACTIVE installer probes with `sudo -n`, which fails without a
@@ -55,7 +63,8 @@ main() {
 
   echo "==> Bootstrapping ($PROFILE)"
 
-  # 1. Homebrew (also pulls in Xcode Command Line Tools / git on a bare machine).
+  # 1. Rosetta, then Homebrew (also pulls in Xcode Command Line Tools / git).
+  ensure_rosetta
   if ! command -v brew >/dev/null 2>&1; then
     install_homebrew
   fi

@@ -28,6 +28,48 @@ setup() {
   [ "${lines[1]}" = "installer-ran" ]
 }
 
+@test "ensure_rosetta installs rosetta on arm64 when missing" {
+  stubs="$BATS_TEST_TMPDIR/stubs"
+  log="$BATS_TEST_TMPDIR/calls.log"
+  mkdir -p "$stubs"
+  printf '#!/bin/bash\necho arm64\n' > "$stubs/uname"
+  printf '#!/bin/bash\nexit 1\n' > "$stubs/arch"
+  printf '#!/bin/bash\necho "sudo $*" >> "%s"\n' "$log" > "$stubs/sudo"
+  chmod +x "$stubs/uname" "$stubs/arch" "$stubs/sudo"
+
+  PATH="$stubs:/usr/bin:/bin" ensure_rosetta
+
+  run cat "$log"
+  [ "$output" = "sudo softwareupdate --install-rosetta --agree-to-license" ]
+}
+
+@test "ensure_rosetta is a no-op when rosetta already works" {
+  stubs="$BATS_TEST_TMPDIR/stubs"
+  log="$BATS_TEST_TMPDIR/calls.log"
+  mkdir -p "$stubs"
+  printf '#!/bin/bash\necho arm64\n' > "$stubs/uname"
+  printf '#!/bin/bash\nexit 0\n' > "$stubs/arch"
+  printf '#!/bin/bash\necho "sudo $*" >> "%s"\n' "$log" > "$stubs/sudo"
+  chmod +x "$stubs/uname" "$stubs/arch" "$stubs/sudo"
+
+  PATH="$stubs:/usr/bin:/bin" ensure_rosetta
+
+  [ ! -f "$log" ]
+}
+
+@test "ensure_rosetta is a no-op on intel" {
+  stubs="$BATS_TEST_TMPDIR/stubs"
+  log="$BATS_TEST_TMPDIR/calls.log"
+  mkdir -p "$stubs"
+  printf '#!/bin/bash\necho x86_64\n' > "$stubs/uname"
+  printf '#!/bin/bash\necho "sudo $*" >> "%s"\n' "$log" > "$stubs/sudo"
+  chmod +x "$stubs/uname" "$stubs/sudo"
+
+  PATH="$stubs:/usr/bin:/bin" ensure_rosetta
+
+  [ ! -f "$log" ]
+}
+
 @test "check_remote_readable succeeds for a repo that needs no credentials" {
   repo="$BATS_TEST_TMPDIR/repo.git"
   git init --bare -q "$repo"
