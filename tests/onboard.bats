@@ -53,6 +53,24 @@ setup() {
   [ ! -f "$log" ]
 }
 
+@test "finish_engineer_remote pushes with the Bitwarden agent socket" {
+  stubs="$BATS_TEST_TMPDIR/stubs"
+  log="$BATS_TEST_TMPDIR/calls.log"
+  mkdir -p "$stubs"
+  cat > "$stubs/git" <<EOF
+#!/bin/bash
+echo "git[\${SSH_AUTH_SOCK:-none}] \$*" >> "$log"
+[[ "\$*" == *"remote get-url"* ]] && echo "https://github.com/you/bootstrap.git"
+exit 0
+EOF
+  chmod +x "$stubs/git"
+  check_github_ssh() { return 0; }
+
+  BW_SSH_SOCK=/tmp/bw.sock PATH="$stubs:/usr/bin:/bin" finish_engineer_remote
+
+  grep -q "^git\[/tmp/bw.sock\] -C .* push origin HEAD$" "$log"
+}
+
 @test "extract_recovery_key pulls the key out of fdesetup output" {
   run extract_recovery_key "Enter the password for user 'admin':
 Recovery key = 'ABCD-2345-EFGH-6789-JKLM-2345'"

@@ -28,6 +28,14 @@ in
     SSH_AUTH_SOCK = bitwardenAgentSock;
   };
 
+  # Belt and braces with SSH_AUTH_SOCK above: IdentityAgent also covers shells
+  # and GUI apps that never sourced the home-manager session variables.
+  programs.ssh = {
+    enable = true;
+    enableDefaultConfig = false;
+    settings."*".IdentityAgent = ''"${bitwardenAgentSock}"'';
+  };
+
   programs.zsh = {
     enable = true;
     enableCompletion = true;

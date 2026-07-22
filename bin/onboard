@@ -227,7 +227,7 @@ finish_engineer_remote() {
   fi
   if check_github_ssh; then
     say "Pushing your overlay commit"
-    git -C "$BOOTSTRAP_DIR" push origin HEAD \
+    SSH_AUTH_SOCK="$BW_SSH_SOCK" git -C "$BOOTSTRAP_DIR" push origin HEAD \
       || note "push failed — run: git -C $BOOTSTRAP_DIR push origin"
   else
     note "GitHub SSH not verified — push later with: git -C $BOOTSTRAP_DIR push origin"
