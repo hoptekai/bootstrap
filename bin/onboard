@@ -6,11 +6,8 @@
 set -euo pipefail
 
 BOOTSTRAP_DIR="${BOOTSTRAP_DIR:-$HOME/.config/bootstrap}"
-# shellcheck disable=SC2034
 NONINTERACTIVE="${BOOTSTRAP_NONINTERACTIVE:-0}"
-# shellcheck disable=SC2034
 OP_SSH_SOCK="$HOME/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
-# shellcheck disable=SC2034
 SKIPPED=""
 
 say()  { printf '\n==> %s\n' "$*"; }
@@ -30,6 +27,126 @@ to_ssh_url() {
 # Personal recovery key from `fdesetup enable` output (XXXX-XXXX-XXXX-XXXX-XXXX-XXXX).
 extract_recovery_key() {
   printf '%s' "$1" | grep -Eo '[A-Z0-9]{4}(-[A-Z0-9]{4}){5}' | head -n1 || true
+}
+
+# ---- interactive framework -------------------------------------------------
+
+add_skipped() { SKIPPED="${SKIPPED}  - $1\n"; }
+
+# verify_loop <label> <check-fn>: re-check until it passes; 'skip' records and continues.
+verify_loop() {
+  local label="$1" fn="$2" a
+  if [[ "$NONINTERACTIVE" == "1" ]]; then add_skipped "$label"; return 0; fi
+  until "$fn"; do
+    a="$(ask "    [$label] not verified — press Enter to re-check, or type 'skip': ")"
+    if [[ "$a" == "skip" ]]; then add_skipped "$label"; return 0; fi
+  done
+  note "$label: ok"
+}
+
+summary() {
+  say "Done."
+  if [[ -n "$SKIPPED" ]]; then
+    note "Skipped steps — finish these when you can:"
+    printf '%b' "$SKIPPED"
+  fi
+  note "Everyday use: 'boot update' (pull fleet changes), 'boot pick', 'boot doctor'."
+}
+
+# ---- state checks ----------------------------------------------------------
+
+check_op_signin() { command -v op >/dev/null 2>&1 && op account list >/dev/null 2>&1; }
+check_ssh_agent() { SSH_AUTH_SOCK="$OP_SSH_SOCK" ssh-add -l >/dev/null 2>&1; }
+# NB: `ssh -T git@github.com` exits 1 even on success, so capture with `|| true`
+# instead of piping straight into grep (pipefail would eat the match).
+check_github_ssh() {
+  local out
+  out="$(SSH_AUTH_SOCK="$OP_SSH_SOCK" ssh -T -o StrictHostKeyChecking=accept-new git@github.com 2>&1 || true)"
+  grep -q 'successfully authenticated' <<<"$out"
+}
+check_filevault() { fdesetup status | grep -q 'FileVault is On'; }
+
+# ---- guided steps ----------------------------------------------------------
+
+ensure_1password_installed() {
+  say "1Password"
+  brew list --cask 1password >/dev/null 2>&1     || brew install --cask 1password
+  brew list --cask 1password-cli >/dev/null 2>&1 || brew install --cask 1password-cli
+}
+
+guide_op_signin() {
+  if check_op_signin; then note "1Password: already signed in"; return 0; fi
+  say "1Password sign-in"
+  if [[ "$NONINTERACTIVE" != "1" ]]; then open -a 1Password || true; fi
+  note "In the 1Password window that just opened:"
+  note "  1. Sign in to the company account (use your invite email)."
+  note "  2. Accept any shared vaults you've been invited to (engineers: 'Eng')."
+  note "  3. Settings -> Developer -> turn ON 'Integrate with 1Password CLI'."
+  verify_loop "1Password sign-in + CLI integration" check_op_signin
+}
+
+guide_ssh_agent() {
+  if check_ssh_agent; then note "1Password SSH agent: key available"; return 0; fi
+  say "1Password SSH agent"
+  note "In 1Password: Settings -> Developer -> turn ON 'Use the SSH agent'."
+  note "No SSH key yet? New Item -> SSH Key -> Generate New Key (Ed25519)."
+  verify_loop "1Password SSH agent" check_ssh_agent
+}
+
+guide_github_key() {
+  if check_github_ssh; then note "GitHub SSH: authenticated"; return 0; fi
+  say "GitHub SSH key"
+  local pubkey=""
+  if [[ "$NONINTERACTIVE" != "1" ]]; then
+    pubkey="$(SSH_AUTH_SOCK="$OP_SSH_SOCK" ssh-add -L 2>/dev/null | head -n1 || true)"
+  fi
+  if [[ -n "$pubkey" ]]; then
+    note "Your public key (add it on GitHub):"
+    printf '\n%s\n\n' "$pubkey"
+  fi
+  note "On https://github.com/settings/keys add the key TWICE:"
+  note "  - 'New SSH key' with type 'Authentication Key'"
+  note "  - 'New SSH key' with type 'Signing Key'"
+  if [[ "$NONINTERACTIVE" != "1" ]]; then open "https://github.com/settings/keys" || true; fi
+  verify_loop "GitHub SSH auth" check_github_ssh
+}
+
+save_recovery_key() {
+  local key="$1" title a=""
+  title="FileVault recovery key ($(hostname))"
+  if check_op_signin \
+     && op item create --category "Secure Note" --title "$title" "notesPlain=$key" >/dev/null 2>&1; then
+    note "Recovery key saved to 1Password as '$title'."
+    return 0
+  fi
+  printf '\n    FILEVAULT RECOVERY KEY:  %s\n\n' "$key"
+  note "Couldn't save it to 1Password automatically. Store it there NOW — it is shown only once."
+  until [[ "$a" == "saved" ]]; do
+    a="$(ask "    Type 'saved' once it is stored somewhere safe: ")"
+  done
+  clear >/dev/null 2>&1 || true
+  note "FileVault recovery key stored."
+}
+
+ensure_filevault() {
+  if check_filevault; then note "FileVault: already on"; return 0; fi
+  if [[ "$NONINTERACTIVE" == "1" ]]; then add_skipped "FileVault"; return 0; fi
+  say "Enabling FileVault — you'll be asked for your macOS account password"
+  local out key
+  # shellcheck disable=SC2024
+  if out="$(sudo fdesetup enable -user "$(id -un)" < /dev/tty)"; then
+    key="$(extract_recovery_key "$out")"
+    if [[ -n "$key" ]]; then
+      save_recovery_key "$key"
+    else
+      note "FileVault enabled, but couldn't find a recovery key in the output:"
+      printf '%s\n' "$out"
+    fi
+  else
+    note "fdesetup couldn't enable FileVault (deferred enablement or no secure token?)."
+    note "Enable it manually: System Settings -> Privacy & Security -> FileVault."
+    verify_loop "FileVault" check_filevault
+  fi
 }
 
 main() {

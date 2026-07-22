@@ -25,3 +25,23 @@ Recovery key = 'ABCD-2345-EFGH-6789-JKLM-2345'"
   [ "$status" -eq 0 ]
   [ "$output" = "" ]
 }
+
+@test "verify_loop records the label as skipped in noninteractive mode" {
+  NONINTERACTIVE=1
+  always_fail() { return 1; }
+  verify_loop "Some step" always_fail
+  [[ "$SKIPPED" == *"Some step"* ]]
+}
+
+@test "verify_loop returns immediately when the check passes" {
+  NONINTERACTIVE=0
+  always_pass() { return 0; }
+  run verify_loop "Some step" always_pass
+  [ "$status" -eq 0 ]
+}
+
+@test "summary lists skipped steps" {
+  add_skipped "FileVault"
+  run summary
+  [[ "$output" == *"FileVault"* ]]
+}
