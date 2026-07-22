@@ -27,13 +27,13 @@ Both share one Homebrew app list, so fleet apps are maintained in a single place
 That's it. The installer clones your fork over HTTPS, then walks you through
 everything interactively, verifying each step before moving on:
 
-- **1Password** — install, sign in, enable the CLI integration and SSH agent,
+- **Bitwarden** — install, sign in (app + `bw` CLI), enable the SSH agent,
   create your SSH key, add it to GitHub (as both an authentication and a
   signing key).
 - **FileVault** — enabled via `fdesetup`; your recovery key is saved straight
-  into your 1Password vault.
+  into your Bitwarden vault.
 - **Your overlay** — `users/<you>.nix` is generated with your name, git email,
-  and 1Password signing key (read from the agent, no pasting), then the first
+  and Bitwarden signing key (read from the agent, no pasting), then the first
   `darwin-rebuild switch` runs and your overlay commit is pushed to your fork.
 
 Any step can be skipped (type `skip`) and finished later — skipped steps are
@@ -46,8 +46,8 @@ curl -fsSL https://raw.githubusercontent.com/hoptekai/bootstrap/main/install.sh 
   | bash -s -- --profile staff
 ```
 
-Walks through 1Password sign-in and FileVault (recovery key saved to
-1Password), then installs the shared apps, your optional picks, and the
+Walks through Bitwarden sign-in and FileVault (recovery key saved to
+Bitwarden), then installs the shared apps, your optional picks, and the
 security baseline.
 
 ---
@@ -63,7 +63,7 @@ The `boot` helper is on your PATH:
 | `boot switch`    | apply your current config                                |
 | `boot pick`      | choose optional packages (gum checklist)                 |
 | `boot add <cask>`| add a Homebrew cask and switch                           |
-| `boot doctor`    | sanity-check Nix / brew / 1Password / SSH / upstream     |
+| `boot doctor`    | sanity-check Nix / brew / Bitwarden / SSH / upstream     |
 
 `just` recipes mirror these for working inside the repo.
 
@@ -93,13 +93,12 @@ templates/devbox.json   starter to drop into projects
 bin/{boot,pick}         helpers
 ```
 
-## Secrets & signing (1Password)
+## Secrets & signing (Bitwarden)
 
-- SSH keys are served by the **1Password SSH agent** — they never touch disk.
-- Git commits are **signed** via 1Password (`op-ssh-sign`, wired in `home/common.nix`).
-- Pull project secrets with `op read`, e.g.
-  `export DATABASE_URL=$(op read 'op://Eng/my-project/database_url')`, or template a `.env`
-  with `op inject`. See `templates/devbox.json`.
+- SSH keys are served by the **Bitwarden SSH agent** (desktop app) — they never touch disk.
+- Git commits are **signed** with that SSH key via the agent (`gpg.format = ssh`, wired in
+  `home/common.nix` — no signer binary needed).
+- CLI secrets come from **`bw`** (`bw get password <item>`), e.g. in devbox scripts.
 
 ## Per-project environments (devbox)
 
@@ -124,7 +123,7 @@ No global Node/Python/Go is installed on purpose.
   stay current.
 - No MDM (Jamf/Kandji) — this repo is the security baseline.
 - FileVault can't be enabled declaratively; `bin/onboard` enables it with
-  `sudo fdesetup enable` and saves the recovery key to 1Password.
+  `sudo fdesetup enable` and saves the recovery key to Bitwarden.
 
 [nix-darwin]: https://github.com/LnL7/nix-darwin
 [Home Manager]: https://github.com/nix-community/home-manager

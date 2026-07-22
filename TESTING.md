@@ -64,15 +64,15 @@ works.
 ## VM notes
 
 1. **Guided steps are skipped by default.** The command `test-vm` prints exports
-   `BOOTSTRAP_NONINTERACTIVE=1`, so the 1Password sign-in, SSH agent, GitHub
+   `BOOTSTRAP_NONINTERACTIVE=1`, so the Bitwarden sign-in, SSH agent, GitHub
    key, FileVault, and package-picker steps are recorded as skipped and the
    overlay gets placeholder values — the run completes hands-off. To exercise
    the real walkthrough, run `just test-vm engineer noninteractive=0` (you'll
-   need a 1Password account to sign in with).
+   need a Bitwarden account to sign in with).
 2. **Clones are HTTPS by default now** — `install.sh` converts `git@` URLs
    itself, so a keyless VM clones fine. The `--fork`/`--upstream` overrides in
    the printed command just point at your test repo.
-3. **1Password-dependent steps can't be fully exercised** in the VM: commit
+3. **Bitwarden-dependent steps can't be fully exercised** in the VM: commit
    signing and the SSH agent. Verify those manually on a real enrolled machine.
 
 ## Cleaning up

@@ -120,3 +120,13 @@ No SSH agent, no GitHub, no overlay.
 The upstream repo is public, so HTTPS clones need no auth. If it is private,
 staff cloning needs a separate decision (today's SSH clone was equally broken
 for staff, who have no keys).
+
+## Amendment (2026-07-22): Bitwarden instead of 1Password
+
+After implementation, the fleet password manager changed to Bitwarden. The
+design is unchanged structurally; the substitutions are: cask `bitwarden` +
+formula `bitwarden-cli` (`bw`, logs in separately via `bw login`); SSH agent
+socket `~/.bitwarden-ssh-agent.sock`; git signing via plain SSH-agent signing
+(no `op-ssh-sign` equivalent — `gpg.ssh.program` dropped); recovery key saved
+with `bw unlock --raw` + `bw encode | bw create item`, same display-and-confirm
+fallback.
