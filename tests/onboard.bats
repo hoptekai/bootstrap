@@ -59,7 +59,7 @@ Recovery key = 'ABCD-2345-EFGH-6789-JKLM-2345'"
   grep -q 'Test User' "$f"
   grep -q 'test@example.com' "$f"
   ! grep -q '__FULL_NAME__' "$f"
-  ! grep -q '__ONEPASSWORD_SSH_PUBLIC_KEY__' "$f"
+  ! grep -q '__BITWARDEN_SSH_PUBLIC_KEY__' "$f"
 }
 
 @test "sed_escape escapes sed replacement metacharacters" {
