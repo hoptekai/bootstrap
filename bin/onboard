@@ -202,6 +202,11 @@ source_nix() {
     && . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
 }
 
+# nix-darwin >= 25.05 requires system activation to run as root.
+first_darwin_switch() {
+  sudo nix run nix-darwin -- switch --flake "$BOOTSTRAP_DIR#$(id -un)"
+}
+
 # SSH provably works now, so move origin off HTTPS and push the overlay commit.
 finish_engineer_remote() {
   local origin ssh_url
@@ -234,7 +239,7 @@ engineer() {
     "$BOOTSTRAP_DIR/bin/pick" engineer || true
   fi
   say "First darwin-rebuild switch (#$(id -un)) — you'll be asked for your password"
-  nix run nix-darwin -- switch --flake "$BOOTSTRAP_DIR#$(id -un)"
+  first_darwin_switch
   if [[ "$NONINTERACTIVE" != "1" ]]; then finish_engineer_remote; fi
   summary
 }

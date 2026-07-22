@@ -14,6 +14,19 @@ setup() {
   [ "$output" = "git@github.com:you/bootstrap.git" ]
 }
 
+@test "first_darwin_switch runs nix-darwin under sudo" {
+  stubs="$BATS_TEST_TMPDIR/stubs"
+  log="$BATS_TEST_TMPDIR/calls.log"
+  mkdir -p "$stubs"
+  printf '#!/bin/bash\necho "sudo $*" >> "%s"\n' "$log" > "$stubs/sudo"
+  chmod +x "$stubs/sudo"
+
+  BOOTSTRAP_DIR=/tmp/bs PATH="$stubs:$PATH" first_darwin_switch
+
+  run cat "$log"
+  [ "${lines[0]}" = "sudo nix run nix-darwin -- switch --flake /tmp/bs#$(id -un)" ]
+}
+
 @test "extract_recovery_key pulls the key out of fdesetup output" {
   run extract_recovery_key "Enter the password for user 'admin':
 Recovery key = 'ABCD-2345-EFGH-6789-JKLM-2345'"
