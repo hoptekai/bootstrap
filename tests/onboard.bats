@@ -61,3 +61,13 @@ Recovery key = 'ABCD-2345-EFGH-6789-JKLM-2345'"
   ! grep -q '__FULL_NAME__' "$f"
   ! grep -q '__ONEPASSWORD_SSH_PUBLIC_KEY__' "$f"
 }
+
+@test "sed_escape escapes sed replacement metacharacters" {
+  run sed_escape 'Smith & Sons | Co\'
+  [ "$output" = 'Smith \& Sons \| Co\\' ]
+}
+
+@test "sed_escape passes plain strings through" {
+  run sed_escape "Jane Doe"
+  [ "$output" = "Jane Doe" ]
+}
