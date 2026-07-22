@@ -75,12 +75,12 @@ case "$cmd" in
       [[ -f "$BOOTSTRAP_DIR/users/$USERNAME.nix" ]] && echo "overlay:   users/$USERNAME.nix present" || echo "overlay:   MISSING (run install.sh)"
     fi
     command -v brew >/dev/null && echo "brew:      ok" || echo "brew:      MISSING"
-    if command -v op >/dev/null; then
-      op account list >/dev/null 2>&1 && echo "1password: signed in" || echo "1password: not signed in (open the app / run 'op signin')"
+    if command -v bw >/dev/null; then
+      bw login --check >/dev/null 2>&1 && echo "bitwarden: logged in" || echo "bitwarden: not logged in (run 'bw login')"
     else
-      echo "1password: op CLI MISSING"
+      echo "bitwarden: bw CLI MISSING"
     fi
-    ssh-add -l >/dev/null 2>&1 && echo "ssh agent: key loaded" || echo "ssh agent: no key (enable the 1Password SSH agent)"
+    ssh-add -l >/dev/null 2>&1 && echo "ssh agent: key loaded" || echo "ssh agent: no key (enable the Bitwarden SSH agent)"
     in_repo remote | grep -qx upstream && echo "upstream:  set" || echo "upstream:  NOT set"
     ;;
   help|*)

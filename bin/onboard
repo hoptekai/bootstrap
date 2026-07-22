@@ -7,7 +7,7 @@ set -euo pipefail
 
 BOOTSTRAP_DIR="${BOOTSTRAP_DIR:-$HOME/.config/bootstrap}"
 NONINTERACTIVE="${BOOTSTRAP_NONINTERACTIVE:-0}"
-OP_SSH_SOCK="$HOME/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
+BW_SSH_SOCK="$HOME/.bitwarden-ssh-agent.sock"
 SKIPPED=""
 
 say()  { printf '\n==> %s\n' "$*"; }
@@ -60,42 +60,45 @@ summary() {
 
 # ---- state checks ----------------------------------------------------------
 
-check_op_signin() { command -v op >/dev/null 2>&1 && op account list >/dev/null 2>&1; }
-check_ssh_agent() { SSH_AUTH_SOCK="$OP_SSH_SOCK" ssh-add -l >/dev/null 2>&1; }
+check_bw_login() { command -v bw >/dev/null 2>&1 && bw login --check >/dev/null 2>&1; }
+check_ssh_agent() { SSH_AUTH_SOCK="$BW_SSH_SOCK" ssh-add -l >/dev/null 2>&1; }
 # NB: `ssh -T git@github.com` exits 1 even on success, so capture with `|| true`
 # instead of piping straight into grep (pipefail would eat the match).
 check_github_ssh() {
   local out
-  out="$(SSH_AUTH_SOCK="$OP_SSH_SOCK" ssh -T -o StrictHostKeyChecking=accept-new git@github.com 2>&1 || true)"
+  out="$(SSH_AUTH_SOCK="$BW_SSH_SOCK" ssh -T -o StrictHostKeyChecking=accept-new git@github.com 2>&1 || true)"
   grep -q 'successfully authenticated' <<<"$out"
 }
 check_filevault() { fdesetup status | grep -q 'FileVault is On'; }
 
 # ---- guided steps ----------------------------------------------------------
 
-ensure_1password_installed() {
-  say "1Password"
-  brew list --cask 1password >/dev/null 2>&1     || brew install --cask 1password
-  brew list --cask 1password-cli >/dev/null 2>&1 || brew install --cask 1password-cli
+ensure_bitwarden_installed() {
+  say "Bitwarden"
+  brew list --cask bitwarden >/dev/null 2>&1 || brew install --cask bitwarden
+  brew list bitwarden-cli >/dev/null 2>&1    || brew install bitwarden-cli
 }
 
-guide_op_signin() {
-  if check_op_signin; then note "1Password: already signed in"; return 0; fi
-  say "1Password sign-in"
-  if [[ "$NONINTERACTIVE" != "1" ]]; then open -a 1Password || true; fi
-  note "In the 1Password window that just opened:"
-  note "  1. Sign in to the company account (use your invite email)."
-  note "  2. Accept any shared vaults you've been invited to (engineers: 'Eng')."
-  note "  3. Settings -> Developer -> turn ON 'Integrate with 1Password CLI'."
-  verify_loop "1Password sign-in + CLI integration" check_op_signin
+guide_bw_signin() {
+  if check_bw_login; then note "Bitwarden: CLI already logged in"; return 0; fi
+  say "Bitwarden sign-in"
+  if [[ "$NONINTERACTIVE" != "1" ]]; then open -a Bitwarden || true; fi
+  note "In the Bitwarden window that just opened:"
+  note "  1. Log in to the company account (use your invite email)."
+  note "  2. Settings -> turn ON 'Enable SSH agent'."
+  note "The CLI logs in separately (self-hosted/EU server? first: bw config server <url>):"
+  if [[ "$NONINTERACTIVE" != "1" ]]; then
+    bw login < /dev/tty || true
+  fi
+  verify_loop "Bitwarden sign-in (app + CLI)" check_bw_login
 }
 
 guide_ssh_agent() {
-  if check_ssh_agent; then note "1Password SSH agent: key available"; return 0; fi
-  say "1Password SSH agent"
-  note "In 1Password: Settings -> Developer -> turn ON 'Use the SSH agent'."
-  note "No SSH key yet? New Item -> SSH Key -> Generate New Key (Ed25519)."
-  verify_loop "1Password SSH agent" check_ssh_agent
+  if check_ssh_agent; then note "Bitwarden SSH agent: key available"; return 0; fi
+  say "Bitwarden SSH agent"
+  note "Settings -> turn ON 'Enable SSH agent'."
+  note "No SSH key yet? New item -> SSH key (generates Ed25519)."
+  verify_loop "Bitwarden SSH agent" check_ssh_agent
 }
 
 guide_github_key() {
@@ -103,7 +106,7 @@ guide_github_key() {
   say "GitHub SSH key"
   local pubkey=""
   if [[ "$NONINTERACTIVE" != "1" ]]; then
-    pubkey="$(SSH_AUTH_SOCK="$OP_SSH_SOCK" ssh-add -L 2>/dev/null | head -n1 || true)"
+    pubkey="$(SSH_AUTH_SOCK="$BW_SSH_SOCK" ssh-add -L 2>/dev/null | head -n1 || true)"
   fi
   if [[ -n "$pubkey" ]]; then
     note "Your public key (add it on GitHub):"
@@ -117,15 +120,19 @@ guide_github_key() {
 }
 
 save_recovery_key() {
-  local key="$1" title a=""
+  local key="$1" title session payload a=""
   title="FileVault recovery key ($(hostname))"
-  if check_op_signin \
-     && op item create --category "Secure Note" --title "$title" "notesPlain=$key" >/dev/null 2>&1; then
-    note "Recovery key saved to 1Password as '$title'."
-    return 0
+  if check_bw_login; then
+    note "Unlock Bitwarden to save the recovery key (master password):"
+    if session="$(bw unlock --raw < /dev/tty)" \
+       && payload="{\"type\":2,\"secureNote\":{\"type\":0},\"name\":\"$title\",\"notes\":\"$key\"}" \
+       && printf '%s' "$payload" | bw encode | bw create item --session "$session" >/dev/null 2>&1; then
+      note "Recovery key saved to Bitwarden as '$title'."
+      return 0
+    fi
   fi
   printf '\n    FILEVAULT RECOVERY KEY:  %s\n\n' "$key"
-  note "Couldn't save it to 1Password automatically. Store it there NOW — it is shown only once."
+  note "Couldn't save it to Bitwarden automatically. Store it there NOW — it is shown only once."
   until [[ "$a" == "saved" ]]; do
     a="$(ask "    Type 'saved' once it is stored somewhere safe: ")"
   done
@@ -167,12 +174,12 @@ write_overlay() {
   else
     full_name="$(ask 'Full name (for git): ')"
     git_email="$(ask 'Git email: ')"
-    pubkey="$(SSH_AUTH_SOCK="$OP_SSH_SOCK" ssh-add -L 2>/dev/null | head -n1 || true)"
+    pubkey="$(SSH_AUTH_SOCK="$BW_SSH_SOCK" ssh-add -L 2>/dev/null | head -n1 || true)"
     if [[ -z "$pubkey" ]]; then
-      echo "Paste your 1Password SSH PUBLIC key (ssh-ed25519 ...), used to sign commits:"
+      echo "Paste your Bitwarden SSH PUBLIC key (ssh-ed25519 ...), used to sign commits:"
       pubkey="$(ask '> ')"
     else
-      note "Using your 1Password SSH key for commit signing."
+      note "Using your Bitwarden SSH key for commit signing."
     fi
   fi
   sed -e "s|__FULL_NAME__|$(sed_escape "$full_name")|" \
@@ -214,8 +221,8 @@ finish_engineer_remote() {
 }
 
 engineer() {
-  ensure_1password_installed
-  guide_op_signin
+  ensure_bitwarden_installed
+  guide_bw_signin
   guide_ssh_agent
   guide_github_key
   ensure_filevault
@@ -235,8 +242,8 @@ engineer() {
 # ---- staff flow ------------------------------------------------------------
 
 staff() {
-  ensure_1password_installed
-  guide_op_signin
+  ensure_bitwarden_installed
+  guide_bw_signin
   ensure_filevault
   say "Installing apps (brew bundle)"
   brew bundle --file="$BOOTSTRAP_DIR/staff/Brewfile"
