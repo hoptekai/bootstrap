@@ -12,6 +12,10 @@ PROFILE="${1:-engineer}"
 command -v gum >/dev/null 2>&1 || { echo "gum not found (installed via home/common.nix or Homebrew)"; exit 1; }
 [[ -f "$LIST" ]] || { echo "missing $LIST"; exit 1; }
 
+# Under `curl | bash` stdin is the pipe, which leaves gum's TUI deaf to the
+# keyboard — reattach to the terminal when we have one.
+if ( : < /dev/tty ) 2>/dev/null; then exec < /dev/tty; fi
+
 trim() { local s="$1"; s="${s#"${s%%[![:space:]]*}"}"; s="${s%"${s##*[![:space:]]}"}"; printf '%s' "$s"; }
 
 labels=(); types=(); names=(); preselected=()
@@ -29,7 +33,11 @@ done < "$LIST"
 
 sel_csv="$(IFS=,; echo "${preselected[*]:-}")"
 echo "Select optional packages (space to toggle, enter to confirm):"
-mapfile -t chosen < <(gum choose --no-limit --selected "$sel_csv" -- "${labels[@]}")
+# No mapfile: macOS /bin/bash is 3.2.
+chosen=()
+while IFS= read -r line; do
+  [[ -n "$line" ]] && chosen+=("$line")
+done < <(gum choose --no-limit --selected "$sel_csv" -- "${labels[@]}")
 
 # Resolve chosen labels -> (type,name).
 chosen_casks=(); chosen_nix=(); chosen_brews=()
